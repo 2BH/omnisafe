@@ -30,6 +30,7 @@ from omnisafe.algorithms.off_policy import (
     DDPGPID,
     SAC,
     SACPID,
+    SACLB,
     TD3,
     TD3PID,
     DDPGLag,

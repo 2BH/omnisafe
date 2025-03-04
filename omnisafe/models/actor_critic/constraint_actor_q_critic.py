@@ -17,6 +17,7 @@
 from copy import deepcopy
 
 from torch import optim
+import torch
 
 from omnisafe.models.actor_critic.actor_q_critic import ActorQCritic
 from omnisafe.models.base import Critic
@@ -100,3 +101,44 @@ class ConstraintActorQCritic(ActorQCritic):
             self.cost_critic.parameters(),
         ):
             target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
+
+
+class DoubleConstraintActorQCritic(ActorQCritic):
+    """DoubleConstraintActorQCritic is a wrapper around ConstraintActorQCritic that adds a second cost critic to the model.
+
+    Args:
+        obs_space (OmnisafeSpace): The observation space.
+        act_space (OmnisafeSpace): The action space.
+        model_cfgs (ModelConfig): The model configurations.
+        epochs (int): The number of epochs.
+    """
+
+    def __init__(
+        self,
+        obs_space: OmnisafeSpace,
+        act_space: OmnisafeSpace,
+        model_cfgs: ModelConfig,
+        epochs: int,
+    ) -> None:
+        """Initialize an instance of :class:`ConstraintActorQCritic`."""
+        super().__init__(obs_space, act_space, model_cfgs, epochs)
+
+        self.cost_critic: Critic = CriticBuilder(
+            obs_space=obs_space,
+            act_space=act_space,
+            hidden_sizes=model_cfgs.critic.hidden_sizes,
+            activation=model_cfgs.critic.activation,
+            weight_initialization_mode=model_cfgs.weight_initialization_mode,
+            num_critics=2,
+            use_obs_encoder=False,
+        ).build_critic('q')
+        self.target_cost_critic: Critic = deepcopy(self.cost_critic)
+        for param in self.target_cost_critic.parameters():
+            param.requires_grad = False
+        self.add_module('cost_critic', self.cost_critic)
+        if model_cfgs.critic.lr is not None:
+            self.cost_critic_optimizer: optim.Optimizer
+            self.cost_critic_optimizer = optim.Adam(
+                self.cost_critic.parameters(),
+                lr=model_cfgs.critic.lr,
+            )
